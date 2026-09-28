@@ -393,7 +393,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     int depth = 0;
     int num_paths = pixelcount;
    
-    while (depth < traceDepth)
+    while (num_paths > 0 && depth < traceDepth)
     {
         // clear intersection buffer
         cudaMemset(dev_intersections, 0, num_paths * sizeof(ShadeableIntersection));
