@@ -16,11 +16,15 @@ enum GeomType
     MESH
 };
 
+// World-space triangle (mesh transforms are baked in at load time)
 struct Triangle
 {
     glm::vec3 v0;
     glm::vec3 v1;
     glm::vec3 v2;
+    glm::vec3 n0;
+    glm::vec3 n1;
+    glm::vec3 n2;
 };
 
 struct Ray
@@ -39,6 +43,12 @@ struct Geom
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+
+    // MESH only: range into the scene's triangle buffer + world-space bounds
+    int triangleStart;
+    int triangleCount;
+    glm::vec3 bboxMin;
+    glm::vec3 bboxMax;
 };
 
 struct Material

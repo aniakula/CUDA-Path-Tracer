@@ -71,3 +71,45 @@ __host__ __device__ float sphereIntersectionTest(
     glm::vec3& intersectionPoint,
     glm::vec3& normal,
     bool& outside);
+
+/**
+ * Test intersection between a ray and a world-space triangle (two-sided).
+ * The returned normal is interpolated from the vertex normals and flipped to
+ * face the incoming ray.
+ *
+ * @return                   Ray parameter `t` value. -1 if no intersection.
+ */
+__host__ __device__ float triangleIntersectionTest(
+    const Triangle& tri,
+    Ray r,
+    glm::vec3& intersectionPoint,
+    glm::vec3& normal,
+    bool& outside);
+
+/**
+ * Slab test between a ray and an axis-aligned bounding box.
+ *
+ * @return                   True if the ray hits the box before `tMax`.
+ */
+__host__ __device__ bool aabbIntersectionTest(
+    const glm::vec3& bboxMin,
+    const glm::vec3& bboxMax,
+    Ray r,
+    float tMax);
+
+/**
+ * Closest hit between a ray and every triangle of a MESH geom.
+ * If `useBBox` is set, the mesh's bounding box is tested first and the
+ * triangles are skipped when the box is missed (or is farther than `tMax`).
+ *
+ * @return                   Ray parameter `t` value. -1 if no intersection.
+ */
+__host__ __device__ float meshIntersectionTest(
+    const Geom& mesh,
+    const Triangle* triangles,
+    Ray r,
+    float tMax,
+    bool useBBox,
+    glm::vec3& intersectionPoint,
+    glm::vec3& normal,
+    bool& outside);

@@ -111,3 +111,115 @@ __host__ __device__ float sphereIntersectionTest(
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+__host__ __device__ float triangleIntersectionTest(
+    const Triangle& tri,
+    Ray r,
+    glm::vec3 &intersectionPoint,
+    glm::vec3 &normal,
+    bool &outside)
+{
+    // Moller-Trumbore
+    const float EPS = 1e-8f;
+    glm::vec3 e1 = tri.v1 - tri.v0;
+    glm::vec3 e2 = tri.v2 - tri.v0;
+    glm::vec3 p = glm::cross(r.direction, e2);
+    float det = glm::dot(e1, p);
+    if (fabsf(det) < EPS)
+    {
+        return -1;
+    }
+    float invDet = 1.0f / det;
+
+    glm::vec3 s = r.origin - tri.v0;
+    float u = glm::dot(s, p) * invDet;
+    if (u < 0.0f || u > 1.0f)
+    {
+        return -1;
+    }
+
+    glm::vec3 q = glm::cross(s, e1);
+    float v = glm::dot(r.direction, q) * invDet;
+    if (v < 0.0f || u + v > 1.0f)
+    {
+        return -1;
+    }
+
+    float t = glm::dot(e2, q) * invDet;
+    if (t <= 1e-4f)
+    {
+        return -1;
+    }
+
+    intersectionPoint = r.origin + t * r.direction;
+    normal = glm::normalize((1.0f - u - v) * tri.n0 + u * tri.n1 + v * tri.n2);
+    outside = glm::dot(normal, r.direction) < 0.0f;
+    if (!outside)
+    {
+        normal = -normal;
+    }
+    return t;
+}
+
+__host__ __device__ bool aabbIntersectionTest(
+    const glm::vec3& bboxMin,
+    const glm::vec3& bboxMax,
+    Ray r,
+    float tMax)
+{
+    float tNear = 0.0f;
+    float tFar = tMax;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        float invD = 1.0f / r.direction[axis];
+        float t0 = (bboxMin[axis] - r.origin[axis]) * invD;
+        float t1 = (bboxMax[axis] - r.origin[axis]) * invD;
+        if (invD < 0.0f)
+        {
+            float tmp = t0;
+            t0 = t1;
+            t1 = tmp;
+        }
+        tNear = t0 > tNear ? t0 : tNear;
+        tFar = t1 < tFar ? t1 : tFar;
+        if (tFar < tNear)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+__host__ __device__ float meshIntersectionTest(
+    const Geom& mesh,
+    const Triangle* triangles,
+    Ray r,
+    float tMax,
+    bool useBBox,
+    glm::vec3 &intersectionPoint,
+    glm::vec3 &normal,
+    bool &outside)
+{
+    if (useBBox && !aabbIntersectionTest(mesh.bboxMin, mesh.bboxMax, r, tMax))
+    {
+        return -1;
+    }
+
+    float tMin = -1;
+    glm::vec3 tmpPoint;
+    glm::vec3 tmpNormal;
+    bool tmpOutside;
+    for (int i = 0; i < mesh.triangleCount; ++i)
+    {
+        float t = triangleIntersectionTest(
+            triangles[mesh.triangleStart + i], r, tmpPoint, tmpNormal, tmpOutside);
+        if (t > 0.0f && (tMin < 0.0f || t < tMin))
+        {
+            tMin = t;
+            intersectionPoint = tmpPoint;
+            normal = tmpNormal;
+            outside = tmpOutside;
+        }
+    }
+    return tMin;
+}

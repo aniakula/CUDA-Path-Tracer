@@ -3,9 +3,18 @@
 #include "utilities.h"
 
 #include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include "json.hpp"
 
+#define TINYGLTF_NO_STB_IMAGE
+#define TINYGLTF_NO_STB_IMAGE_WRITE
+#define TINYGLTF_NO_EXTERNAL_IMAGE
+#include "tiny_gltf.h"
+
+#include <algorithm>
+#include <cfloat>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -13,6 +22,274 @@
 
 using namespace std;
 using json = nlohmann::json;
+
+namespace
+{
+    bool gltfSkipImage(tinygltf::Image*, const int, std::string*, std::string*,
+        int, int, const unsigned char*, int, void*)
+    {
+        return true;
+    }
+
+    glm::mat4 gltfNodeMatrix(const tinygltf::Node& node)
+    {
+        if (node.matrix.size() == 16)
+        {
+            // glTF and glm are both column-major
+            glm::mat4 m;
+            for (int i = 0; i < 16; i++)
+            {
+                m[i / 4][i % 4] = (float)node.matrix[i];
+            }
+            return m;
+        }
+
+        glm::mat4 T, R, S;
+        if (node.translation.size() == 3)
+        {
+            T = glm::translate(glm::mat4(), glm::vec3(
+                node.translation[0], node.translation[1], node.translation[2]));
+        }
+        if (node.rotation.size() == 4)
+        {
+            // glTF stores (x, y, z, w); glm::quat takes (w, x, y, z)
+            R = glm::mat4_cast(glm::quat(
+                (float)node.rotation[3], (float)node.rotation[0],
+                (float)node.rotation[1], (float)node.rotation[2]));
+        }
+        if (node.scale.size() == 3)
+        {
+            S = glm::scale(glm::mat4(), glm::vec3(
+                node.scale[0], node.scale[1], node.scale[2]));
+        }
+        return T * R * S;
+    }
+
+    // Returns a pointer to element 0 of an accessor and its byte stride.
+    const unsigned char* gltfAccessorData(
+        const tinygltf::Model& model, const tinygltf::Accessor& accessor, size_t& stride)
+    {
+        const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+        const tinygltf::Buffer& buffer = model.buffers[view.buffer];
+        int s = accessor.ByteStride(view);
+        stride = s > 0 ? (size_t)s : 0;
+        return buffer.data.data() + view.byteOffset + accessor.byteOffset;
+    }
+
+    std::vector<glm::vec3> gltfReadVec3(const tinygltf::Model& model, int accessorIndex)
+    {
+        const tinygltf::Accessor& accessor = model.accessors[accessorIndex];
+        std::vector<glm::vec3> out(accessor.count);
+        if (accessor.bufferView < 0 ||
+            accessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT ||
+            accessor.type != TINYGLTF_TYPE_VEC3)
+        {
+            return {};
+        }
+        size_t stride;
+        const unsigned char* data = gltfAccessorData(model, accessor, stride);
+        for (size_t i = 0; i < accessor.count; i++)
+        {
+            const float* f = reinterpret_cast<const float*>(data + i * stride);
+            out[i] = glm::vec3(f[0], f[1], f[2]);
+        }
+        return out;
+    }
+
+    std::vector<uint32_t> gltfReadIndices(const tinygltf::Model& model, int accessorIndex)
+    {
+        const tinygltf::Accessor& accessor = model.accessors[accessorIndex];
+        std::vector<uint32_t> out(accessor.count);
+        size_t stride;
+        const unsigned char* data = gltfAccessorData(model, accessor, stride);
+        for (size_t i = 0; i < accessor.count; i++)
+        {
+            const unsigned char* p = data + i * stride;
+            switch (accessor.componentType)
+            {
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+                out[i] = *p;
+                break;
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+                out[i] = *reinterpret_cast<const uint16_t*>(p);
+                break;
+            default:
+                out[i] = *reinterpret_cast<const uint32_t*>(p);
+                break;
+            }
+        }
+        return out;
+    }
+
+    void gltfAppendMesh(const tinygltf::Model& model, const tinygltf::Mesh& mesh,
+        const glm::mat4& xform, std::vector<Triangle>& out)
+    {
+        glm::mat3 normalXform = glm::mat3(glm::inverseTranspose(xform));
+
+        for (const tinygltf::Primitive& prim : mesh.primitives)
+        {
+            if (prim.mode != TINYGLTF_MODE_TRIANGLES && prim.mode != -1)
+            {
+                continue;
+            }
+            auto posIt = prim.attributes.find("POSITION");
+            if (posIt == prim.attributes.end())
+            {
+                continue;
+            }
+
+            std::vector<glm::vec3> positions = gltfReadVec3(model, posIt->second);
+            std::vector<glm::vec3> normals;
+            auto nrmIt = prim.attributes.find("NORMAL");
+            if (nrmIt != prim.attributes.end())
+            {
+                normals = gltfReadVec3(model, nrmIt->second);
+            }
+            bool hasNormals = normals.size() == positions.size();
+
+            std::vector<uint32_t> indices;
+            if (prim.indices >= 0)
+            {
+                indices = gltfReadIndices(model, prim.indices);
+            }
+            else
+            {
+                indices.resize(positions.size());
+                for (size_t i = 0; i < indices.size(); i++)
+                {
+                    indices[i] = (uint32_t)i;
+                }
+            }
+
+            for (size_t i = 0; i + 2 < indices.size(); i += 3)
+            {
+                uint32_t i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2];
+                if (i0 >= positions.size() || i1 >= positions.size() || i2 >= positions.size())
+                {
+                    continue;
+                }
+
+                Triangle tri;
+                tri.v0 = glm::vec3(xform * glm::vec4(positions[i0], 1.0f));
+                tri.v1 = glm::vec3(xform * glm::vec4(positions[i1], 1.0f));
+                tri.v2 = glm::vec3(xform * glm::vec4(positions[i2], 1.0f));
+
+                if (hasNormals)
+                {
+                    tri.n0 = glm::normalize(normalXform * normals[i0]);
+                    tri.n1 = glm::normalize(normalXform * normals[i1]);
+                    tri.n2 = glm::normalize(normalXform * normals[i2]);
+                }
+                else
+                {
+                    glm::vec3 n = glm::normalize(glm::cross(tri.v1 - tri.v0, tri.v2 - tri.v0));
+                    tri.n0 = tri.n1 = tri.n2 = n;
+                }
+                out.push_back(tri);
+            }
+        }
+    }
+
+    void gltfAppendNode(const tinygltf::Model& model, int nodeIndex,
+        const glm::mat4& parent, std::vector<Triangle>& out)
+    {
+        const tinygltf::Node& node = model.nodes[nodeIndex];
+        glm::mat4 world = parent * gltfNodeMatrix(node);
+        if (node.mesh >= 0)
+        {
+            gltfAppendMesh(model, model.meshes[node.mesh], world, out);
+        }
+        for (int child : node.children)
+        {
+            gltfAppendNode(model, child, world, out);
+        }
+    }
+}
+
+void Scene::loadGLTF(const std::string& path, bool normalize, Geom& geom)
+{
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string err, warn;
+    loader.SetImageLoader(gltfSkipImage, nullptr);
+
+    bool isBinary = path.size() >= 4 && path.substr(path.size() - 4) == ".glb";
+    bool ok = isBinary
+        ? loader.LoadBinaryFromFile(&model, &err, &warn, path)
+        : loader.LoadASCIIFromFile(&model, &err, &warn, path);
+
+    if (!warn.empty())
+    {
+        cout << "glTF warning: " << warn << endl;
+    }
+    if (!ok)
+    {
+        cout << "Failed to load glTF " << path << ": " << err << endl;
+        exit(-1);
+    }
+
+    // Model-space triangles with the glTF node hierarchy applied
+    std::vector<Triangle> meshTris;
+    if (!model.scenes.empty())
+    {
+        int sceneIndex = model.defaultScene >= 0 ? model.defaultScene : 0;
+        for (int root : model.scenes[sceneIndex].nodes)
+        {
+            gltfAppendNode(model, root, glm::mat4(), meshTris);
+        }
+    }
+    else
+    {
+        for (const tinygltf::Mesh& mesh : model.meshes)
+        {
+            gltfAppendMesh(model, mesh, glm::mat4(), meshTris);
+        }
+    }
+
+    // Optionally recenter and fit the model into a unit cube so that
+    // TRANS/SCALE in the scene file behave the same for any model.
+    glm::mat4 fit;
+    if (normalize && !meshTris.empty())
+    {
+        glm::vec3 lo(FLT_MAX), hi(-FLT_MAX);
+        for (const Triangle& t : meshTris)
+        {
+            lo = glm::min(lo, glm::min(t.v0, glm::min(t.v1, t.v2)));
+            hi = glm::max(hi, glm::max(t.v0, glm::max(t.v1, t.v2)));
+        }
+        glm::vec3 extent = hi - lo;
+        float maxExtent = std::max(extent.x, std::max(extent.y, extent.z));
+        float s = maxExtent > 0.0f ? 1.0f / maxExtent : 1.0f;
+        fit = glm::scale(glm::mat4(), glm::vec3(s)) *
+            glm::translate(glm::mat4(), -0.5f * (lo + hi));
+    }
+
+    glm::mat4 xform = geom.transform * fit;
+    glm::mat3 normalXform = glm::mat3(glm::inverseTranspose(xform));
+
+    geom.triangleStart = (int)triangles.size();
+    geom.triangleCount = (int)meshTris.size();
+    geom.bboxMin = glm::vec3(FLT_MAX);
+    geom.bboxMax = glm::vec3(-FLT_MAX);
+
+    for (Triangle t : meshTris)
+    {
+        t.v0 = glm::vec3(xform * glm::vec4(t.v0, 1.0f));
+        t.v1 = glm::vec3(xform * glm::vec4(t.v1, 1.0f));
+        t.v2 = glm::vec3(xform * glm::vec4(t.v2, 1.0f));
+        t.n0 = glm::normalize(normalXform * t.n0);
+        t.n1 = glm::normalize(normalXform * t.n1);
+        t.n2 = glm::normalize(normalXform * t.n2);
+
+        geom.bboxMin = glm::min(geom.bboxMin, glm::min(t.v0, glm::min(t.v1, t.v2)));
+        geom.bboxMax = glm::max(geom.bboxMax, glm::max(t.v0, glm::max(t.v1, t.v2)));
+        triangles.push_back(t);
+    }
+    geom.bboxMin -= glm::vec3(1e-4f);
+    geom.bboxMax += glm::vec3(1e-4f);
+
+    cout << "Loaded " << path << ": " << geom.triangleCount << " triangles" << endl;
+}
 
 Scene::Scene(string filename)
 {
@@ -62,14 +339,22 @@ void Scene::loadFromJSON(const std::string& jsonName)
         MatNameToID[name] = materials.size();
         materials.emplace_back(newMaterial);
     }
+    size_t lastSlash = jsonName.find_last_of("/\\");
+    std::string sceneDir = lastSlash == std::string::npos ? "" : jsonName.substr(0, lastSlash + 1);
+
     const auto& objectsData = data["Objects"];
     for (const auto& p : objectsData)
     {
         const auto& type = p["TYPE"];
-        Geom newGeom;
+        Geom newGeom{};
+        newGeom.triangleStart = -1;
         if (type == "cube")
         {
             newGeom.type = CUBE;
+        }
+        else if (type == "mesh")
+        {
+            newGeom.type = MESH;
         }
         else
         {
@@ -86,6 +371,12 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newGeom.translation, newGeom.rotation, newGeom.scale);
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+
+        if (newGeom.type == MESH)
+        {
+            bool normalize = p.contains("NORMALIZE") ? p["NORMALIZE"].get<bool>() : true;
+            loadGLTF(sceneDir + p["FILE"].get<std::string>(), normalize, newGeom);
+        }
 
         geoms.push_back(newGeom);
     }
