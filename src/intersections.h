@@ -73,8 +73,8 @@ __host__ __device__ float sphereIntersectionTest(
     bool& outside);
 
 /**
- * Test intersection between a ray and a world-space triangle (two-sided).
- * The returned normal is interpolated from the vertex normals and flipped to
+ * Test intersection between a ray and a triangle.
+ * The normal is interpolated from the vertex normals and flipped to
  * face the incoming ray.
  *
  * @return                   Ray parameter `t` value. -1 if no intersection.
@@ -87,7 +87,7 @@ __host__ __device__ float triangleIntersectionTest(
     bool& outside);
 
 /**
- * Slab test between a ray and an axis-aligned bounding box.
+ * Slab test between a ray and an axis aligned bounding box.
  *
  * @return                   True if the ray hits the box before `tMax`.
  */
@@ -97,19 +97,25 @@ __host__ __device__ bool aabbIntersectionTest(
     Ray r,
     float tMax);
 
+#define MESH_ACCEL_NONE 0   // test every triangle of the mesh
+#define MESH_ACCEL_BBOX 1   // skip the mesh if its bounding box is missed
+#define MESH_ACCEL_OCTREE 2 // only test triangles in octree leaves the ray hits
+
 /**
- * Closest hit between a ray and every triangle of a MESH geom.
- * If `useBBox` is set, the mesh's bounding box is tested first and the
- * triangles are skipped when the box is missed (or is farther than `tMax`).
+ * Closest hit between a ray and a MESH geom, closer than tMax.
+ * `accelMode` is one of the MESH_ACCEL_* values. Octree mode falls back to
+ * bounding box culling for meshes without an octree.
  *
  * @return                   Ray parameter `t` value. -1 if no intersection.
  */
 __host__ __device__ float meshIntersectionTest(
     const Geom& mesh,
     const Triangle* triangles,
+    const OctNode* octreeNodes,
+    const int* octreeTriIndices,
     Ray r,
     float tMax,
-    bool useBBox,
+    int accelMode,
     glm::vec3& intersectionPoint,
     glm::vec3& normal,
     bool& outside);

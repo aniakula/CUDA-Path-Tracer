@@ -1,5 +1,6 @@
 #include "scene.h"
 
+#include "octree.h"
 #include "utilities.h"
 
 #include <glm/gtc/matrix_inverse.hpp>
@@ -35,7 +36,6 @@ namespace
     {
         if (node.matrix.size() == 16)
         {
-            // glTF and glm are both column-major
             glm::mat4 m;
             for (int i = 0; i < 16; i++)
             {
@@ -52,7 +52,7 @@ namespace
         }
         if (node.rotation.size() == 4)
         {
-            // glTF stores (x, y, z, w); glm::quat takes (w, x, y, z)
+            // glTF stores (x, y, z, w) -> glm::quat takes (w, x, y, z)
             R = glm::mat4_cast(glm::quat(
                 (float)node.rotation[3], (float)node.rotation[0],
                 (float)node.rotation[1], (float)node.rotation[2]));
@@ -65,7 +65,7 @@ namespace
         return T * R * S;
     }
 
-    // Returns a pointer to element 0 of an accessor and its byte stride.
+    // returns a pointer to element 0 of an accessor and its byte stride.
     const unsigned char* gltfAccessorData(
         const tinygltf::Model& model, const tinygltf::Accessor& accessor, size_t& stride)
     {
@@ -228,7 +228,7 @@ void Scene::loadGLTF(const std::string& path, bool normalize, Geom& geom)
         exit(-1);
     }
 
-    // Model-space triangles with the glTF node hierarchy applied
+    //triangles with the glTF node hierarchy applied
     std::vector<Triangle> meshTris;
     if (!model.scenes.empty())
     {
@@ -246,8 +246,7 @@ void Scene::loadGLTF(const std::string& path, bool normalize, Geom& geom)
         }
     }
 
-    // Optionally recenter and fit the model into a unit cube so that
-    // TRANS/SCALE in the scene file behave the same for any model.
+    //recenter and fit the model into a unit cube so TRANS/SCALE behave the same for any model.
     glm::mat4 fit;
     if (normalize && !meshTris.empty())
     {
@@ -289,6 +288,9 @@ void Scene::loadGLTF(const std::string& path, bool normalize, Geom& geom)
     geom.bboxMax += glm::vec3(1e-4f);
 
     cout << "Loaded " << path << ": " << geom.triangleCount << " triangles" << endl;
+
+    geom.octreeRoot = buildMeshOctree(triangles, geom.triangleStart, geom.triangleCount,
+        geom.bboxMin, geom.bboxMax, octreeNodes, octreeTriIndices);
 }
 
 Scene::Scene(string filename)
@@ -348,6 +350,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
         const auto& type = p["TYPE"];
         Geom newGeom{};
         newGeom.triangleStart = -1;
+        newGeom.octreeRoot = -1;
         if (type == "cube")
         {
             newGeom.type = CUBE;

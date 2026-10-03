@@ -21,7 +21,7 @@
 #define COMPACTION 1 
 #define ANTIAIASING 1
 #define MATERIAL_SORT 0
-#define MESH_BBOX_CULLING 1
+#define MESH_ACCEL MESH_ACCEL_OCTREE // MESH_ACCEL_NONE, MESH_ACCEL_BBOX, or MESH_ACCEL_OCTREE
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -89,6 +89,8 @@ static ShadeableIntersection* dev_intersections = NULL;
 static int* dev_materialKeys = NULL;
 static int* dev_materialKeysPath = NULL;
 static Triangle* dev_triangles = NULL;
+static OctNode* dev_octreeNodes = NULL;
+static int* dev_octreeTriIndices = NULL;
 
 void InitDataContainer(GuiDataContainer* imGuiData)
 {
@@ -127,6 +129,20 @@ void pathtraceInit(Scene* scene)
             scene->triangles.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
     }
 
+    if (!scene->octreeNodes.empty())
+    {
+        cudaMalloc(&dev_octreeNodes, scene->octreeNodes.size() * sizeof(OctNode));
+        cudaMemcpy(dev_octreeNodes, scene->octreeNodes.data(),
+            scene->octreeNodes.size() * sizeof(OctNode), cudaMemcpyHostToDevice);
+    }
+
+    if (!scene->octreeTriIndices.empty())
+    {
+        cudaMalloc(&dev_octreeTriIndices, scene->octreeTriIndices.size() * sizeof(int));
+        cudaMemcpy(dev_octreeTriIndices, scene->octreeTriIndices.data(),
+            scene->octreeTriIndices.size() * sizeof(int), cudaMemcpyHostToDevice);
+    }
+
     checkCUDAError("pathtraceInit");
 }
 
@@ -141,6 +157,10 @@ void pathtraceFree()
     cudaFree(dev_materialKeysPath);
     cudaFree(dev_triangles);
     dev_triangles = NULL;
+    cudaFree(dev_octreeNodes);
+    dev_octreeNodes = NULL;
+    cudaFree(dev_octreeTriIndices);
+    dev_octreeTriIndices = NULL;
 
     checkCUDAError("pathtraceFree");
 }
@@ -195,6 +215,8 @@ __global__ void computeIntersections(
     Geom* geoms,
     int geoms_size,
     Triangle* triangles,
+    OctNode* octreeNodes,
+    int* octreeTriIndices,
     ShadeableIntersection* intersections)
 {
     int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -229,8 +251,8 @@ __global__ void computeIntersections(
             }
             else if (geom.type == MESH)
             {
-                t = meshIntersectionTest(geom, triangles, pathSegment.ray, t_min,
-                    MESH_BBOX_CULLING, tmp_intersect, tmp_normal, outside);
+                t = meshIntersectionTest(geom, triangles, octreeNodes, octreeTriIndices,
+                    pathSegment.ray, t_min, MESH_ACCEL, tmp_intersect, tmp_normal, outside);
             }
             else
             {
@@ -419,6 +441,8 @@ void pathtrace(uchar4* pbo, int frame, int iter)
             dev_geoms,
             hst_scene->geoms.size(),
             dev_triangles,
+            dev_octreeNodes,
+            dev_octreeTriIndices,
             dev_intersections
             );
 

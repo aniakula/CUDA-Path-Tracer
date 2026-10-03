@@ -13,6 +13,8 @@ public:
 
     std::vector<Geom> geoms;
     std::vector<Triangle> triangles;
+    std::vector<OctNode> octreeNodes;
+    std::vector<int> octreeTriIndices; // indices into triangles, grouped per leaf
     std::vector<Material> materials;
     RenderState state;
 };

@@ -16,7 +16,6 @@ enum GeomType
     MESH
 };
 
-// World-space triangle (mesh transforms are baked in at load time)
 struct Triangle
 {
     glm::vec3 v0;
@@ -25,6 +24,17 @@ struct Triangle
     glm::vec3 n0;
     glm::vec3 n1;
     glm::vec3 n2;
+};
+
+// Children of an interior node are 8 consecutive nodes starting at firstChild,
+// ordered by octant bits (x = 1, y = 2, z = 4).
+struct OctNode
+{
+    glm::vec3 bboxMin;
+    glm::vec3 bboxMax;
+    int firstChild; // -1 for a leaf
+    int triStart;   // leaf only: offset into the octree triangle index buffer
+    int triCount;   // leaf only
 };
 
 struct Ray
@@ -44,11 +54,12 @@ struct Geom
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
 
-    // MESH only: range into the scene's triangle buffer + world-space bounds
+    //Mesh only
     int triangleStart;
     int triangleCount;
     glm::vec3 bboxMin;
     glm::vec3 bboxMax;
+    int octreeRoot;
 };
 
 struct Material

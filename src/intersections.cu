@@ -1,5 +1,7 @@
 #include "intersections.h"
 
+#include "octree.h"
+
 __host__ __device__ float boxIntersectionTest(
     Geom box,
     Ray r,
@@ -119,7 +121,7 @@ __host__ __device__ float triangleIntersectionTest(
     glm::vec3 &normal,
     bool &outside)
 {
-    // Moller-Trumbore
+    //moller-Trumbore
     const float EPS = 1e-8f;
     glm::vec3 e1 = tri.v1 - tri.v0;
     glm::vec3 e2 = tri.v2 - tri.v0;
@@ -190,17 +192,95 @@ __host__ __device__ bool aabbIntersectionTest(
     return true;
 }
 
-__host__ __device__ float meshIntersectionTest(
+__host__ __device__ float octreeIntersectionTest(
     const Geom& mesh,
     const Triangle* triangles,
+    const OctNode* octreeNodes,
+    const int* octreeTriIndices,
     Ray r,
     float tMax,
-    bool useBBox,
     glm::vec3 &intersectionPoint,
     glm::vec3 &normal,
     bool &outside)
 {
-    if (useBBox && !aabbIntersectionTest(mesh.bboxMin, mesh.bboxMax, r, tMax))
+    // Children are pushed so the octant the ray enters first is popped first;
+    // once a hit is found, closest shrinks and farther boxes fail the AABB test.
+    int nearMask = (r.direction.x < 0.0f ? 1 : 0)
+        | (r.direction.y < 0.0f ? 2 : 0)
+        | (r.direction.z < 0.0f ? 4 : 0);
+
+    int stack[OCTREE_STACK_SIZE];
+    int stackSize = 0;
+    stack[stackSize++] = mesh.octreeRoot;
+
+    float tMin = -1;
+    float closest = tMax;
+    glm::vec3 tmpPoint;
+    glm::vec3 tmpNormal;
+    bool tmpOutside;
+
+    while (stackSize > 0)
+    {
+        const OctNode& node = octreeNodes[stack[--stackSize]];
+        if (!aabbIntersectionTest(node.bboxMin, node.bboxMax, r, closest))
+        {
+            continue;
+        }
+
+        if (node.firstChild < 0)
+        {
+            for (int i = node.triStart; i < node.triStart + node.triCount; ++i)
+            {
+                float t = triangleIntersectionTest(
+                    triangles[octreeTriIndices[i]], r, tmpPoint, tmpNormal, tmpOutside);
+                if (t > 0.0f && t < closest)
+                {
+                    closest = t;
+                    tMin = t;
+                    intersectionPoint = tmpPoint;
+                    normal = tmpNormal;
+                    outside = tmpOutside;
+                }
+            }
+            continue;
+        }
+
+        for (int c = 7; c >= 0; --c)
+        {
+            int child = node.firstChild + (c ^ nearMask);
+            const OctNode& childNode = octreeNodes[child];
+            if (childNode.firstChild < 0 && childNode.triCount == 0)
+            {
+                continue;
+            }
+            if (stackSize < OCTREE_STACK_SIZE)
+            {
+                stack[stackSize++] = child;
+            }
+        }
+    }
+    return tMin;
+}
+
+__host__ __device__ float meshIntersectionTest(
+    const Geom& mesh,
+    const Triangle* triangles,
+    const OctNode* octreeNodes,
+    const int* octreeTriIndices,
+    Ray r,
+    float tMax,
+    int accelMode,
+    glm::vec3 &intersectionPoint,
+    glm::vec3 &normal,
+    bool &outside)
+{
+    if (accelMode == MESH_ACCEL_OCTREE && mesh.octreeRoot >= 0)
+    {
+        return octreeIntersectionTest(mesh, triangles, octreeNodes, octreeTriIndices,
+            r, tMax, intersectionPoint, normal, outside);
+    }
+
+    if (accelMode != MESH_ACCEL_NONE && !aabbIntersectionTest(mesh.bboxMin, mesh.bboxMax, r, tMax))
     {
         return -1;
     }
