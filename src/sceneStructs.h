@@ -32,8 +32,8 @@ struct OctNode
 {
     glm::vec3 bboxMin;
     glm::vec3 bboxMax;
-    int firstChild; // -1 for a leaf
-    int triStart;   // leaf only: offset into the octree triangle index buffer
+    int firstChild; // -1 for a leaf o.t. offset into 8 children nodes
+    int triStart;   // leaf only offset into the triangle index buffer
     int triCount;   // leaf only
 };
 
@@ -70,7 +70,8 @@ struct Material
         float exponent;
         glm::vec3 color;
     } specular;
-    float hasReflective;
+    float hasReflective; // probability of a mirror bounce instead of a diffuse one
+    float roughness;     // 0 = perfect mirror, 1 = reflection as blurry as diffuse
     float hasRefractive;
     float indexOfRefraction;
     float emittance;

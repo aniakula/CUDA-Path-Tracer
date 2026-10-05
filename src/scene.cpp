@@ -190,23 +190,26 @@ namespace
         }
     }
 
+    // an empty nodeName loads every node; otherwise only that node and its children
     void gltfAppendNode(const tinygltf::Model& model, int nodeIndex,
-        const glm::mat4& parent, std::vector<Triangle>& out)
+        const glm::mat4& parent, const std::string& nodeName, bool included,
+        std::vector<Triangle>& out)
     {
         const tinygltf::Node& node = model.nodes[nodeIndex];
         glm::mat4 world = parent * gltfNodeMatrix(node);
-        if (node.mesh >= 0)
+        included = included || nodeName.empty() || node.name == nodeName;
+        if (included && node.mesh >= 0)
         {
             gltfAppendMesh(model, model.meshes[node.mesh], world, out);
         }
         for (int child : node.children)
         {
-            gltfAppendNode(model, child, world, out);
+            gltfAppendNode(model, child, world, nodeName, included, out);
         }
     }
 }
 
-void Scene::loadGLTF(const std::string& path, bool normalize, Geom& geom)
+void Scene::loadGLTF(const std::string& path, bool normalize, const std::string& nodeName, Geom& geom)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
@@ -227,15 +230,14 @@ void Scene::loadGLTF(const std::string& path, bool normalize, Geom& geom)
         cout << "Failed to load glTF " << path << ": " << err << endl;
         exit(-1);
     }
-
-    //triangles with the glTF node hierarchy applied
+    
     std::vector<Triangle> meshTris;
     if (!model.scenes.empty())
     {
         int sceneIndex = model.defaultScene >= 0 ? model.defaultScene : 0;
         for (int root : model.scenes[sceneIndex].nodes)
         {
-            gltfAppendNode(model, root, glm::mat4(), meshTris);
+            gltfAppendNode(model, root, glm::mat4(), nodeName, false, meshTris);
         }
     }
     else
@@ -244,6 +246,12 @@ void Scene::loadGLTF(const std::string& path, bool normalize, Geom& geom)
         {
             gltfAppendMesh(model, mesh, glm::mat4(), meshTris);
         }
+    }
+
+    if (meshTris.empty())
+    {
+        cout << "glTF " << path << " has no triangles"
+            << (nodeName.empty() ? "" : " under node " + nodeName) << endl;
     }
 
     //recenter and fit the model into a unit cube so TRANS/SCALE behave the same for any model.
@@ -321,7 +329,8 @@ void Scene::loadFromJSON(const std::string& jsonName)
         const auto& name = item.key();
         const auto& p = item.value();
         Material newMaterial{};
-        // TODO: handle materials loading differently
+
+
         if (p["TYPE"] == "Diffuse")
         {
             const auto& col = p["RGB"];
@@ -337,6 +346,23 @@ void Scene::loadFromJSON(const std::string& jsonName)
         {
             const auto& col = p["RGB"];
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
+            newMaterial.specular.color = newMaterial.color;
+            newMaterial.hasReflective = 1.0f;
+            newMaterial.roughness = p.value("ROUGHNESS", 0.0f);
+        }
+        // diffuse base with a mirror coat that is hit REFLECTIVITY of the time
+        else if (p["TYPE"] == "Glossy")
+        {
+            const auto& col = p["RGB"];
+            newMaterial.color = glm::vec3(col[0], col[1], col[2]);
+            newMaterial.specular.color = glm::vec3(1.0f);
+            if (p.contains("SPEC_RGB"))
+            {
+                const auto& spec = p["SPEC_RGB"];
+                newMaterial.specular.color = glm::vec3(spec[0], spec[1], spec[2]);
+            }
+            newMaterial.hasReflective = p.value("REFLECTIVITY", 0.5f);
+            newMaterial.roughness = p.value("ROUGHNESS", 0.0f);
         }
         MatNameToID[name] = materials.size();
         materials.emplace_back(newMaterial);
@@ -378,7 +404,8 @@ void Scene::loadFromJSON(const std::string& jsonName)
         if (newGeom.type == MESH)
         {
             bool normalize = p.contains("NORMALIZE") ? p["NORMALIZE"].get<bool>() : true;
-            loadGLTF(sceneDir + p["FILE"].get<std::string>(), normalize, newGeom);
+            std::string nodeName = p.value("NODE", std::string());
+            loadGLTF(sceneDir + p["FILE"].get<std::string>(), normalize, nodeName, newGeom);
         }
 
         geoms.push_back(newGeom);
