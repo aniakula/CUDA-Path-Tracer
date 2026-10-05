@@ -23,8 +23,10 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <chrono>
 
 static std::string startTimeString;
+static auto renderStart = std::chrono::steady_clock::now();
 
 // For camera controls
 static bool leftMousePressed = false;
@@ -342,14 +344,13 @@ int main(int argc, char **argv) {
 
   cameraPosition = cam.position;
 
-  // compute phi (horizontal) and theta (vertical) relative 3D axis
-  // so, (0 0 1) is forward, (0 1 0) is up
-  glm::vec3 viewXZ = glm::vec3(view.x, 0.0f, view.z);
-  glm::vec3 viewZY = glm::vec3(0.0f, view.y, view.z);
-  phi = glm::acos(glm::dot(glm::normalize(viewXZ), glm::vec3(0, 0, -1)));
-  theta = glm::acos(glm::dot(glm::normalize(viewZY), glm::vec3(0, 1, 0)));
+  // spherical coords of the eye around lookAt, matching how runCuda rebuilds the position;
+  // acos of the projected view lost the sign and flipped off-axis cameras
   ogLookAt = cam.lookAt;
-  zoom = glm::length(cam.position - ogLookAt);
+  glm::vec3 offset = cam.position - ogLookAt;
+  zoom = glm::length(offset);
+  theta = glm::acos(glm::clamp(offset.y / zoom, -1.0f, 1.0f));
+  phi = glm::atan(offset.x, offset.z);
 
   // Initialize CUDA and GL components
   init();
@@ -415,6 +416,7 @@ void runCuda() {
   if (iteration == 0) {
     pathtraceFree();
     pathtraceInit(scene);
+    renderStart = std::chrono::steady_clock::now();
   }
 
   if (iteration < renderState->iterations) {
@@ -428,6 +430,14 @@ void runCuda() {
 
     // unmap buffer object
     cudaGLUnmapBufferObject(pbo);
+
+    if (iteration % 100 == 0) {
+        auto now = std::chrono::steady_clock::now();
+        double sec = std::chrono::duration<double>(now - renderStart).count();
+        printf("iter %d: %.3f s total (%.3f ms/iter avg)\n",
+            iteration, sec, 1000.0 * sec / iteration);
+        fflush(stdout);
+    }
   } else {
     saveImage();
     pathtraceFree();
