@@ -48,12 +48,10 @@ CUDA Path Tracer
 
 Models sourced from the [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets) repository:
 
-| Model | Asset | Notes / License |
-|---|---|---|
-| **Duck** | [Duck](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Duck) | Classic glTF sample duck (`Duck.glb`) |
-| **Dragon** | [DragonAttenuation](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/DragonAttenuation) | Stanford dragon mesh ([Stanford Graphics Library](http://www.graphics.stanford.edu/data/3Dscanrep/)); based on [Morgan McGuire’s Computer Graphics Archive](https://casual-effects.com/data). Cloth backdrop: [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| **Skull** | [ScatteringSkull](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/ScatteringSkull) | Model files licensed [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-
-Khronos sample-asset metadata / documentation is typically under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
+| Model | Asset |
+|---|---|
+| **Duck** | [Duck](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Duck) |
+| **Dragon** | [DragonAttenuation](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/DragonAttenuation) |
+| **Skull** | [ScatteringSkull](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/ScatteringSkull) |
 
 Used AI agents to generate JSON scene files (Model: Claude Opus 5.5)
