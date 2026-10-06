@@ -5,7 +5,7 @@ CUDA Path Tracer
 * Anirudh Akula
 * Tested on: Windows 11, NVIDIA T1000 4096MB (CETS Virtual PC)
 
-
+<img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/cbff80bb-2f2e-436b-8f2b-5421c572a762" />
 
 <img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/9284b49c-2e99-4d8b-ac84-b1b767dd4ea1" />
 
