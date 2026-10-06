@@ -11,10 +11,57 @@ CUDA Path Tracer
 
 
 ## Features
-- bullets
+- CUDA path tracer with iterative bounce loop
+- Camera ray generation
+- Primitive inbuilt geometry (spheres and cubes)
+- glTF / glB mesh loading via tinygltf (optional NODE filter, optional normalize-to-unit-box)
+- Triangle intersection with Möller–Trumbore
+- Mesh acceleration modes (toggleable): brute-force triangles, AABB culling, octree
+- Octree built on the CPU, traversed on the GPU with nearest-first child ordering
+- Materials:
+  - Diffuse, Specular (mirrors + roughness)
+  - Glossy (diffuse + reflective coat)
+  - Emitting Cosine-weighted hemisphere sampling for diffuse BRDFs
+- Stream compaction of terminated paths (thrust::partition + finalGather)
+- Optional material sorting (thrust::sort_by_key) to group shading by material
+- Stochastic antialiasing
+- Interactive OpenGL preview with ImGui controls
   
 ## Quick Start
-- how to build and run 
+
+**Requirements:** CMake ≥ 3.24, CUDA Toolkit, C++17 (MSVC on Windows), OpenGL
+
+### Build (Windows)
+
+```powershell
+mkdir build
+cd build
+cmake .. -G "Visual Studio 17 2022" -A x64
+cmake --build . --config Release
+```
+
+The binary is written to `build/bin/Release/cis565_path_tracer.exe`.
+
+### Run
+
+From `build/bin/Release`:
+
+```powershell
+.\cis565_path_tracer.exe ..\..\..\scenes\cornell.json
+```
+
+Other scenes:
+
+```powershell
+.\cis565_path_tracer.exe ..\..\..\scenes\dragon_showcase.json
+.\cis565_path_tracer.exe ..\..\..\scenes\skull_spheres.json
+.\cis565_path_tracer.exe ..\..\..\scenes\chessboard_cubes.json
+```
+### Controls
+
+- **Esc** — save image and exit
+- **S** — save image (filename printed in the console)
+- **Space** — re-center the camera on the original look-at
 
 ## Theory
 - path tracing loop (bouncing)
