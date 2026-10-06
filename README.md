@@ -83,6 +83,8 @@ Other scenes:
 ## Visuals
 - show AA
 - show different materials rendered
+<img width="800" height="800" alt="image" src="https://github.com/user-attachments/assets/7784f677-4042-4f8c-89f0-96fa762defbc" />
+
 
 ## Credits
 
