@@ -90,13 +90,16 @@ Other scenes:
 <td align="center">
 <img width="400" height="400" src="https://github.com/user-attachments/assets/894f3d0f-8c74-47d4-ace4-568d6b747c40" alt="AA">
 <br>
+<img width="194" height="628" alt="image" src="https://github.com/user-attachments/assets/be472e69-37bf-48b3-b26d-462cb48d430c" />
 <em>Figure 1: AA visualization</em>
 </td>
 
 <td align="center">
 <img width="400" height="400" alt="image" src="https://github.com/user-attachments/assets/d754900e-9e3b-4d2c-8c94-364933a1d9b2" />
 <br>
-<em>Figure 2: AA visualization</em>
+<img width="202" height="534" alt="image" src="https://github.com/user-attachments/assets/46104194-dc17-450b-bad2-bf42850ad075" />
+
+<em>Figure 2: No AA visualization</em>
 </td>
 </tr>
 </table>
