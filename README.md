@@ -82,9 +82,32 @@ Other scenes:
 
 ## Visuals
 - show AA
-- show different materials rendered
-<img width="800" height="800" alt="image" src="https://github.com/user-attachments/assets/7784f677-4042-4f8c-89f0-96fa762defbc" />
+  
+<div align="center">
 
+<table>
+<tr>
+<td align="center">
+<img width="400" height="400" src="https://github.com/user-attachments/assets/894f3d0f-8c74-47d4-ace4-568d6b747c40" alt="AA">
+<br>
+<em>Figure 1: AA visualization</em>
+</td>
+
+<td align="center">
+<img width="400" height="400" src="https://github.com/user-attachments/assets/894f3d0f-8c74-47d4-ace4-568d6b747c40" alt="AA">
+<br>
+<em>Figure 2: AA visualization</em>
+</td>
+</tr>
+</table>
+
+</div>
+
+- show different materials rendered
+
+<div align="center">
+<img width="800" height="800" alt="image" src="https://github.com/user-attachments/assets/7784f677-4042-4f8c-89f0-96fa762defbc" />
+</div>
 
 ## Credits
 
