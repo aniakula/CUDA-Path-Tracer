@@ -53,3 +53,4 @@ Models sourced from the [Khronos glTF Sample Assets](https://github.com/KhronosG
 
 Khronos sample-asset metadata / documentation is typically under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
 
+Used AI agents to generate JSON scene files (Model: Claude Opus 5.5)
