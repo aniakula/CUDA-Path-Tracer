@@ -7,6 +7,9 @@ CUDA Path Tracer
 
 
 
+<img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/9284b49c-2e99-4d8b-ac84-b1b767dd4ea1" />
+
+
 ## Features
 - bullets
   
