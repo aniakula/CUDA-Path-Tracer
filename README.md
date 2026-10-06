@@ -94,7 +94,7 @@ Other scenes:
 </td>
 
 <td align="center">
-<img width="400" height="400" src="https://github.com/user-attachments/assets/894f3d0f-8c74-47d4-ace4-568d6b747c40" alt="AA">
+<img width="400" height="400" alt="image" src="https://github.com/user-attachments/assets/d754900e-9e3b-4d2c-8c94-364933a1d9b2" />
 <br>
 <em>Figure 2: AA visualization</em>
 </td>
