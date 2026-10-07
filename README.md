@@ -79,8 +79,6 @@ Per iteration, the GPU:
 
 Throughput starts at `(1,1,1)` and is multiplied by the BRDF at each bounce, so later bounces contribute less light.
 
-<!-- insert bouncing / path loop diagram here -->
-
 ### Camera Ray Generation
 
 For pixel `(x, y)`, a ray originates at the camera position and aims through that pixel. The direction is built from the camera basis (`view`, `right`, `up`) and the pixel’s offset from the image center, scaled by `pixelLength`.
@@ -88,8 +86,6 @@ For pixel `(x, y)`, a ray originates at the camera position and aims through tha
 With antialiasing enabled, `(j_x, j_y)` are uniform random offsets in `([0,1))`, so each iteration samples a slightly different point inside the pixel.
 
 Each path also stores `remainingBounces = DEPTH` and a `pixelIndex` so its final color can be written back to the correct pixel.
-
-<!-- insert ray generation diagram here -->
 
 ### Intersections
 
@@ -102,8 +98,6 @@ Each path also stores `remainingBounces = DEPTH` and a `pixelIndex` so its final
 
 Moller–Trumbore finds the ray to triangle intersection by solving for barycentric coordinates and distance without pre computing and storing extra data for the plane equation of the triangle.
 
-<!-- insert Möller–Trumbore diagram here -->
-
 **Why this over other mesh tests?**
 Moller–Trumbore:
 
@@ -114,12 +108,61 @@ Moller–Trumbore:
 
 ## Optimizations
 
-- show stats and charts
-- culling
-  <img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/9284b49c-2e99-4d8b-ac84-b1b767dd4ea1" />
-- octotree
-- stream compaction
-- material sorting
+### Stream Compaction
+After each bounce, many paths are already finished (hit a light, missed the scene, or hit depth 0). Without compaction, every later bounce still launches a thread for those dead paths.
+With `COMPACTION` on, `thrust::partition` splits the path buffer into **alive** and **terminated**. Terminated paths are gathered into the image (`finalGather`), then `num_paths` shrinks to only the alive count. Later bounce kernels therefore run fewer threads, which cuts wasted intersection and shade work as the path wavefront dies off.
+
+### Material Sorting
+Shading branches on material type (diffuse vs specular vs glossy vs emit). If neighboring threads in a warp hit different materials, those branches diverge and serialize.
+With `MATERIAL_SORT` on, after intersection we extract each path’s material id, then `thrust::sort_by_key` reorders both the intersection and path arrays so paths with the same material sit together. The shade kernel then runs with less warp divergence.
+
+### Mesh AABB Culling (`MESH_ACCEL_BBOX`)
+Before testing any triangle of a mesh, the ray is tested against that mesh’s axis-aligned bounding box. If the ray misses the box (or hits it beyond the closest hit so far), the entire mesh is skipped.
+This is cheap and helps a lot when many rays never come near a mesh (e.g. wall bounces in a Cornell box). If the ray **does** hit the box, every triangle in the mesh is still tested — so culling alone does not help once you are inside a dense mesh.
+
+### Octree (`MESH_ACCEL_OCTREE`)
+Each mesh builds a CPU-side octree (max depth 8, leaf target ≤ 16 triangles). Triangles that straddle child boxes are referenced in every leaf they touch (exact triangle–box tests during build). The tree is flattened to `OctNode[]` + a leaf triangle-index buffer and uploaded to the GPU.
+On the GPU, traversal is iterative with a fixed stack:
+1. Pop a node; skip it if its AABB misses the ray (or is farther than the closest hit).
+2. **Leaf:** run Möller–Trumbore only on that leaf’s triangles.
+3. **Interior:** push children in **nearest-first** order (direction-based `nearMask`) so closer hits are found early and farther nodes can be pruned.
+Compared to bbox-only mode, most of the mesh’s triangles are never tested for a given ray.
+
+
+
+
+### Stats:
+
+#### Benchmark for regular optimization measurement:
+
+<img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/9284b49c-2e99-4d8b-ac84-b1b767dd4ea1" />
+
+#### Benchmark for mesh optimization measurement:
+
+<img width="800" height="800" alt="image" src="https://github.com/user-attachments/assets/234d4adf-4e29-4a50-9d1e-e21381068047" />
+
+
+#### Non-Mesh optimization methods:
+
+<img width="1482" height="888" alt="image" src="https://github.com/user-attachments/assets/4a4377d5-01dc-4421-a116-e2d68b3f3a17" />
+
+<img width="1576" height="1070" alt="image" src="https://github.com/user-attachments/assets/01049566-780f-4007-8dfa-a28f65977aa7" />
+
+
+#### Mesh optimization methods:
+
+<img width="1768" height="1058" alt="image" src="https://github.com/user-attachments/assets/fce963b8-9b2a-4fde-a883-fde23bf80aef" />
+
+<img width="1572" height="1070" alt="image" src="https://github.com/user-attachments/assets/d131b7c1-500c-404b-9c55-e916a3515249" />
+
+
+
+### Results
+
+**Material sorting vs compaction only.** On the chessboard scene enabling material sorting was **marginally slower** than compaction alone. Shading in this tracer is cheap (a small branch in `scatterRay`), so the divergence savings are small. The sort cost likley exceeds the time saved. Sorting would matter more with heavier shaders or many more material IDs. Here compaction is the optimization that shows up clearly.
+
+**Octree vs AABB culling.** AABB culling only lets you avoid paying the O(triangles) cost when the ray doesn't interest the bounding box of teh mesh. The octree runs triangle tests only inside partitioned leaves. On mesh-heavy scenes that means far fewer Moller Trumbore tests per ray, which is why octree mode shows **large speedups** over bbox-only.
+
 
 ## Visuals
 
