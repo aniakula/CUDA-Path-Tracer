@@ -6,9 +6,7 @@ CUDA Path Tracer
 * Tested on: Windows 11, NVIDIA T1000 4096MB (CETS Virtual PC)
 
 <img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/cbff80bb-2f2e-436b-8f2b-5421c572a762" />
-
-<img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/9284b49c-2e99-4d8b-ac84-b1b767dd4ea1" />
-
+<img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/58efed41-c463-4213-8859-fc6648a93f2b" />
 
 ## Features
 - CUDA path tracer with iterative bounce loop
@@ -111,14 +109,10 @@ Moller–Trumbore:
 - Rejects many misses early via barycentric bounds
 - Needs only the three vertices (no precomputed plane or edge equations)
 
-## Representations
-- Rays, Geoms and materials
-- mesh to GPU buffered triangles
-<img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/58efed41-c463-4213-8859-fc6648a93f2b" />
-
 ## Optimizations
 - show stats and charts
 - culling
+<img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/9284b49c-2e99-4d8b-ac84-b1b767dd4ea1" />
 - octotree
 - stream compaction
 - material sorting
