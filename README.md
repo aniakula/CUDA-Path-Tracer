@@ -64,9 +64,52 @@ Other scenes:
 - **Space** — re-center the camera on the original look-at
 
 ## Theory
-- path tracing loop (bouncing)
-- camera ray gen
-- intersections and testing (Moller trumbore)
+
+### Path Tracing Loop
+
+Each sample for a pixel is a **path**: a ray that leaves the camera and bounces through the scene until it hits a light, misses everything, or runs out of bounces.
+
+Per iteration, the GPU:
+
+1. **Generates** one camera ray per pixel (`generateRayFromCamera`)
+2. **Intersects** that ray against the scene (`computeIntersections`)
+3. **Shades** the hit and updates path. Afterwards either terminates or scatters a new ray (`shadeMaterial` / `scatterRay`)
+4. **Compacts** away finished paths and repeats until no paths remain or `DEPTH` is reached
+5. **Accumulates** the path’s contribution into the image buffer
+
+Throughput starts at `(1,1,1)` and is multiplied by the BRDF at each bounce, so later bounces contribute less light.
+
+<!-- insert bouncing / path loop diagram here -->
+
+### Camera Ray Generation
+
+For pixel `(x, y)`, a ray originates at the camera position and aims through that pixel. The direction is built from the camera basis (`view`, `right`, `up`) and the pixel’s offset from the image center, scaled by `pixelLength`.
+
+With antialiasing enabled, `(j_x, j_y)` are uniform random offsets in `([0,1))`, so each iteration samples a slightly different point inside the pixel.
+
+Each path also stores `remainingBounces = DEPTH` and a `pixelIndex` so its final color can be written back to the correct pixel.
+
+<!-- insert ray generation diagram here -->
+
+### Intersections
+
+`computeIntersections` walks every geometry in the scene and keeps the closest hit (`t_min`):
+
+- **Spheres / cubes** — intersection tests with inverse transforms
+- **Meshes** — each candidate triangle is tested with **Möller–Trumbore** 
+
+### Möller–Trumbore Triangle Test
+
+Moller–Trumbore finds the ray to triangle intersection by solving for barycentric coordinates and distance without pre computing and storing extra data for the plane equation of the triangle.
+
+<!-- insert Möller–Trumbore diagram here -->
+
+**Why this over other mesh tests?**
+Moller–Trumbore:
+- Avoids a separate plane equation and projection step
+- Uses only vector ops that map well to GPUs
+- Rejects many misses early via barycentric bounds
+- Needs only the three vertices (no precomputed plane or edge equations)
 
 ## Representations
 - Rays, Geoms and materials
