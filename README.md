@@ -202,7 +202,7 @@ Emitting surfaces skip scatter.
 <div align="center">
 <img width="720" alt="Cornell box with five material spheres" src="https://github.com/user-attachments/assets/7784f677-4042-4f8c-89f0-96fa762defbc" />
 <br>
-<em>Five materials under shared lighting: mirror, red lacquer, diffuse blue, teal satin, brushed gold.</em>
+<em>Five materials under shared lighting </em>
 </div>
 
 ### Antialiasing
